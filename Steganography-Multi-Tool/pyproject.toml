@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stegkit"
+version = "0.1.0"
+description = "Educational multi-format steganography toolkit"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "cryptography>=41",
+  "Pillow>=10",
+  "numpy>=1.24",
+  "soundfile>=0.12",
+  "qrcode[pil]>=7.4",
+  "opencv-python-headless>=4.8",
+  "pypdf>=4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+stegkit = "stegkit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["stegkit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
