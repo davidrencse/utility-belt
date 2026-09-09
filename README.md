@@ -14,7 +14,7 @@ Educational multi-format steganography CLI. Hides one authenticated payload in P
 Web app that estimates where a photo was taken by fusing EXIF GPS, IPTC/XMP place tags, and an AI visual estimate, then plots ranked candidates on a map (Next.js/TypeScript).
 
 ### [Overlay](Overlay/) (Overlay HUD)
-A Cluely / Interview-Coder-style Windows 11 overlay: a borderless, always-on-top window excluded from screen capture (invisible to Zoom/Teams/Meet/Discord/OBS) while fully visible on the physical screen. Reuses the Port Scanner engine for one of its panels.
+A borderless, always-on-top utility overlay for Windows and Arch Linux, including Hyprland. Windows supports compositor-level capture exclusion; on Arch Linux the overlay runs normally and uses compositor keybinds via the app's local command socket. Reuses the Port Scanner engine for one of its panels.
 
 ## Legal & Ethical Notice
 

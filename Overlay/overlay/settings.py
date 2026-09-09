@@ -7,10 +7,12 @@ Use the module-level singleton:  from settings import settings
 """
 import json
 import os
+import platform
 
 from PySide6.QtCore import QObject, Signal
 
 _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_settings.json")
+_IS_WINDOWS = platform.system().lower().startswith("win")
 
 DEFAULTS = {
     # UI
@@ -21,7 +23,7 @@ DEFAULTS = {
     "show_net": True,
     "start_tab": 0,          # tab shown on launch
     # behaviour / stealth
-    "capture_exclusion": True,
+    "capture_exclusion": _IS_WINDOWS,
     "click_through": False,
     "always_on_top": True,
     # performance
@@ -30,11 +32,8 @@ DEFAULTS = {
     "ping_target": "8.8.8.8",
     "vt_api_key": "",        # optional VirusTotal API key for inline stats
     # quick launch: list of {"label": str, "path": str}; path may be a folder,
-    # a file, or an http(s) URL. Opened from the header ⋯ menu.
-    "shortcuts": [
-        {"label": "Cybersecurity Resume",
-         "path": r"C:\Users\david\Desktop\Resumes\Cybersecurity Resume"},
-    ],
+    # a file, or an http(s) URL. Opened from the header menu.
+    "shortcuts": [],
     # customizable global hotkeys (action id -> combo string, e.g. "alt+y").
     "hotkeys": {
         "toggle_visible": "alt+y",

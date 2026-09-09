@@ -1,8 +1,7 @@
 """
 ChatGPT panel - an embedded Chromium view (QtWebEngine) pointed at
 chatgpt.com with a PERSISTENT profile, so a sign-in survives restarts. No API
-key: this is your normal web session, and because the view lives inside the
-capture-excluded overlay it's hidden from screen-share too.
+key: this is your normal web session.
 
 Two ways to be logged in:
   * Manual  - just sign in once inside the panel; the persistent profile keeps
@@ -19,6 +18,7 @@ If QtWebEngine isn't installed (it ships in PySide6-Addons / the PySide6
 metapackage), the panel degrades to an explanatory message.
 """
 import os
+import platform
 
 from PySide6.QtCore import QUrl, Qt, QDateTime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -37,8 +37,12 @@ except Exception as exc:  # pragma: no cover
 _PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "..", "_webprofile")
 DEFAULT_URL = "https://chatgpt.com/"
-_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+if platform.system().lower() == "linux":
+    _UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+else:
+    _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 
 # domains whose cookies matter for a ChatGPT session
 _AUTH_DOMAINS = ("chatgpt.com", "openai.com", "auth0.openai.com",

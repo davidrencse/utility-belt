@@ -1,21 +1,27 @@
 """
-Windows-only window tricks, all via ctypes (no third-party deps).
+Platform window helpers.
 
-The headline one is SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE),
+On Windows, the headline one is SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE),
 which tells the desktop compositor to leave this window OUT of any capture:
 Zoom / Teams / Meet / Discord screen-share, OBS "Display/Window Capture",
 PrintScreen, and the Windows Graphics Capture / DXGI Desktop Duplication
 APIs all render it as blank. The local user still sees it normally.
+
+Linux/Wayland compositors, including Hyprland, do not expose an equivalent
+per-window capture-exclusion API to normal client applications. The overlay
+still runs there, but this module reports capture exclusion as unsupported.
 
 HONEST LIMITS (do not oversell this):
   * A phone or camera pointed at the monitor still sees the window.
   * Kernel-level anti-cheat / proctoring can detect the *process or window*
     (and can even query this affinity flag) - this is not stealth from them.
   * It is a per-window compositor flag, not OS-wide invisibility.
-So this is "hidden from screen-share", not "undetectable by all means".
+So this is Windows capture exclusion, not invisibility by all means.
 """
 import ctypes
 import platform
+
+from PySide6.QtCore import Qt
 
 IS_WINDOWS = platform.system().lower().startswith("win")
 
@@ -48,7 +54,7 @@ def set_capture_exclusion(win, enabled=True):
     """Exclude (or re-include) the window from screen capture.
     Returns True on success, False if the OS/driver refused."""
     if not IS_WINDOWS:
-        return False
+        return not enabled
     hwnd = _hwnd(win)
     affinity = WDA_EXCLUDEFROMCAPTURE if enabled else WDA_NONE
     ok = _u32().SetWindowDisplayAffinity(ctypes.wintypes.HWND(hwnd),
@@ -84,7 +90,8 @@ def set_click_through(win, enabled=True):
     """When enabled, mouse events pass straight through the window to
     whatever is beneath it (the HUD becomes a pure overlay you can't grab)."""
     if not IS_WINDOWS:
-        return False
+        win.setAttribute(Qt.WA_TransparentForMouseEvents, bool(enabled))
+        return True
     hwnd = _hwnd(win)
     style = _get_exstyle(hwnd)
     if enabled:

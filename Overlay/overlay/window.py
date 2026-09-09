@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 
 from . import theme as T
 from .core import stealth as win_stealth
+from .platform_utils import IS_WINDOWS, open_path, runtime_note
 from .settings import settings
 from .panels.system_panel import SystemPanel
 from .panels.tools_panel import ToolsPanel
@@ -95,7 +96,7 @@ class OverlayWindow(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
                             | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setWindowTitle("sysmon")
+        self.setWindowTitle("sysmon-overlay")
         self.resize(468, 606)
         self.setMinimumSize(392, 440)
 
@@ -134,7 +135,7 @@ class OverlayWindow(QWidget):
         h.addSpacing(4)
 
         self.badge = QLabel("HIDDEN")
-        self.badge.setToolTip("Excluded from screen capture · Ctrl+Alt+X to toggle")
+        self.badge.setToolTip(self._capture_tooltip())
         self._style_badge(True, True)
         h.addWidget(self.badge)
         h.addStretch(1)
@@ -195,13 +196,21 @@ class OverlayWindow(QWidget):
         if on and ok:
             fg, txt = T.TEXT_MUTED, "HIDDEN"
         elif on and not ok:
-            fg, txt = T.TEXT, "VISIBLE?"
+            fg, txt = T.TEXT, "UNSUPPORTED"
         else:
             fg, txt = T.TEXT, "VISIBLE"
         self.badge.setText("● " + txt)
         self.badge.setStyleSheet(
             f"color:{T.hexs(fg)};background:transparent;border:none;"
             f"font:700 7pt '{T.MONO}';letter-spacing:1px;")
+        self.badge.setToolTip(self._capture_tooltip(ok))
+
+    def _capture_tooltip(self, ok=False):
+        if IS_WINDOWS:
+            return "Excluded from screen capture when enabled"
+        if ok:
+            return "Screen-capture hiding is off"
+        return f"Screen-capture hiding is not available on {runtime_note()}"
 
     def _select(self, idx):
         self.stack.setCurrentIndex(idx)
@@ -272,6 +281,7 @@ class OverlayWindow(QWidget):
             self._apply_stealth_pending = False
             win_stealth.apply_tool_window(self)
             self.set_capture(self._capture_on)
+            win_stealth.set_click_through(self, self._click_through)
 
     def hideEvent(self, e):
         super().hideEvent(e)
@@ -325,7 +335,9 @@ class OverlayWindow(QWidget):
                 webbrowser.open(path)
             return
         try:
-            os.startfile(path)  # Windows: folder in Explorer, file in default app
+            ok = open_path(path)
+            if not ok:
+                self.badge.setToolTip(f"couldn't open: {path}")
         except OSError as exc:
             self.badge.setToolTip(f"couldn't open: {exc}")
 

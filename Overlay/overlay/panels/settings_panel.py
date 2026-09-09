@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QScrollArea, QFrame)
 
 from .. import theme as T
+from ..platform_utils import IS_WINDOWS, runtime_note
 from ..settings import settings
 
 
@@ -70,8 +71,12 @@ class SettingsPanel(QWidget):
         self._toggle(root, "Show network graph", "show_net")
 
         # -- stealth -------------------------------------------------------
-        root.addWidget(_section("Stealth & window"))
-        self._toggle(root, "Hidden from screen capture", "capture_exclusion")
+        root.addWidget(_section("Window"))
+        capture_label = (
+            "Hidden from screen capture"
+            if IS_WINDOWS else f"Screen-capture hiding ({runtime_note()}: unsupported)"
+        )
+        self._toggle(root, capture_label, "capture_exclusion", enabled=IS_WINDOWS)
         self._toggle(root, "Click-through (ignore mouse)", "click_through")
         self._toggle(root, "Always on top", "always_on_top")
 
@@ -119,7 +124,11 @@ class SettingsPanel(QWidget):
         # -- keybinds ------------------------------------------------------
         from ..hotkeys import ACTIONS
         root.addWidget(_section("Keybinds"))
-        note = QLabel("e.g. alt+y · ctrl+alt+left · f8   (blank = off)")
+        if IS_WINDOWS:
+            note_text = "e.g. alt+y · ctrl+alt+left · f8   (blank = off)"
+        else:
+            note_text = "Hyprland uses these combos when printing bind lines"
+        note = QLabel(note_text)
         note.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:7pt '{T.MONO}';")
         root.addWidget(note)
         self._keyedits = {}
@@ -152,12 +161,13 @@ class SettingsPanel(QWidget):
         settings.set("hotkeys", binds)   # app re-registers on this change
 
     # -- helpers -----------------------------------------------------------
-    def _toggle(self, layout, label, key):
+    def _toggle(self, layout, label, key, enabled=True):
         row = QHBoxLayout()
         row.addWidget(_row_label(label))
         row.addStretch(1)
         cb = QCheckBox()
         cb.setChecked(bool(settings.get(key)))
+        cb.setEnabled(bool(enabled))
         cb.setStyleSheet(T.checkbox_qss())
         cb.toggled.connect(lambda v, k=key: settings.set(k, bool(v)))
         self._checks[key] = cb

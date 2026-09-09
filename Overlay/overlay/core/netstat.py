@@ -1,15 +1,17 @@
 """
-Dependency-free network throughput counter for Windows, via iphlpapi's
-GetIfTable (MIB_IFTABLE / MIB_IFROW). Sums in/out octets across the real
-interfaces; the caller diffs successive totals to get bytes/sec.
+Dependency-free network throughput counter.
 
-Falls back to (0, 0) on non-Windows or if the API is unavailable, so the
-graph just flatlines instead of crashing.
+Windows uses iphlpapi's GetIfTable (MIB_IFTABLE / MIB_IFROW). Linux reads
+/proc/net/dev. The caller diffs successive totals to get bytes/sec.
+
+Falls back to (0, 0) if the platform API is unavailable, so the graph just
+flatlines instead of crashing.
 """
 import ctypes
 import platform
 
 IS_WINDOWS = platform.system().lower().startswith("win")
+IS_LINUX = platform.system().lower() == "linux"
 
 MAX_INTERFACE_NAME_LEN = 256
 MAXLEN_IFDESCR = 256
@@ -59,6 +61,8 @@ def _make_iftable(n):
 def total_octets():
     """Return (in_bytes, out_bytes) summed across active interfaces.
     32-bit counters wrap at 4 GiB; the caller's delta logic clamps negatives."""
+    if IS_LINUX:
+        return _linux_total_octets()
     if not IS_WINDOWS:
         return 0, 0
     try:
@@ -86,4 +90,29 @@ def total_octets():
         if row.dwType in _COUNTED:
             in_b += row.dwInOctets
             out_b += row.dwOutOctets
+    return in_b, out_b
+
+
+def _linux_total_octets():
+    in_b = out_b = 0
+    try:
+        with open("/proc/net/dev", "r", encoding="utf-8") as f:
+            lines = f.readlines()[2:]
+    except OSError:
+        return 0, 0
+    for line in lines:
+        if ":" not in line:
+            continue
+        name, data = line.split(":", 1)
+        iface = name.strip()
+        if iface == "lo" or iface.startswith(("docker", "veth", "br-", "virbr")):
+            continue
+        fields = data.split()
+        if len(fields) < 16:
+            continue
+        try:
+            in_b += int(fields[0])
+            out_b += int(fields[8])
+        except ValueError:
+            continue
     return in_b, out_b

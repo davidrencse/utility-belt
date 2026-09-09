@@ -1,14 +1,15 @@
 """
-Specs panel - a Task-Manager-style read-out of this Windows 11 PC: name,
-OS, CPU/GPU/RAM/disk/board, network adapters, and saved Wi-Fi networks with
-passwords.
+Specs panel - a Task-Manager-style read-out of this machine: name,
+OS, CPU/GPU/RAM/disk/board, network adapters, and Windows saved Wi-Fi
+networks with passwords.
 
 Everything reuses the existing engine (system_info.gather, net_recon.
-get_local_network_info); the slow bits (a PowerShell CIM call, ipconfig)
-run on a worker so opening the tab never freezes the HUD. Wi-Fi passwords
-come from `netsh wlan show profile key=clear` on THIS machine (the user's own
-saved networks) and are only fetched when the user clicks the reveal button.
+get_local_network_info); slow platform queries run on a worker so opening the
+tab never freezes the HUD. Wi-Fi passwords come from `netsh wlan show profile
+key=clear` on Windows and are only fetched when the user clicks the reveal
+button.
 """
+import platform
 import re
 import subprocess
 
@@ -20,14 +21,17 @@ from ..core import bridge as eng
 from .. import theme as T
 
 _NOWIN = 0x08000000  # CREATE_NO_WINDOW (Popen is also patched globally)
+_IS_WINDOWS = platform.system().lower().startswith("win")
 
 
 def _run(cmd, timeout=12):
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=timeout, creationflags=_NOWIN)
+        kwargs = {"capture_output": True, "text": True, "timeout": timeout}
+        if _IS_WINDOWS:
+            kwargs["creationflags"] = _NOWIN
+        p = subprocess.run(cmd, **kwargs)
         return (p.stdout or "") + (p.stderr or "")
-    except (subprocess.TimeoutExpired, OSError):
+    except (subprocess.TimeoutExpired, OSError, ValueError):
         return ""
 
 
@@ -43,10 +47,11 @@ class SpecsWorker(QThread):
                 out["net"] = eng.net_recon.get_local_network_info()
         except Exception as exc:
             out["error"] = f"{type(exc).__name__}: {exc}"
-        text = _run(["netsh", "wlan", "show", "interfaces"], timeout=6)
-        m = re.search(r"^\s*SSID\s*:\s*(.+?)\s*$", text, re.M)
-        if m:
-            out["ssid"] = m.group(1)
+        if _IS_WINDOWS:
+            text = _run(["netsh", "wlan", "show", "interfaces"], timeout=6)
+            m = re.search(r"^\s*SSID\s*:\s*(.+?)\s*$", text, re.M)
+            if m:
+                out["ssid"] = m.group(1)
         self.done.emit(out)
 
 
@@ -56,6 +61,9 @@ class WifiWorker(QThread):
 
     def run(self):
         results = []
+        if not _IS_WINDOWS:
+            self.done.emit(results)
+            return
         listing = _run(["netsh", "wlan", "show", "profiles"], timeout=8)
         names = re.findall(r"All User Profile\s*:\s*(.+?)\s*$", listing, re.M)
         names += re.findall(r"User Profile\s*:\s*(.+?)\s*$", listing, re.M)
@@ -180,11 +188,16 @@ class SpecsPanel(QWidget):
         self._section("Wi-Fi")
         self._kv("Connected SSID", data.get("ssid"))
         self.reveal_btn = QPushButton("Reveal saved Wi-Fi passwords")
+        self.reveal_btn.setEnabled(_IS_WINDOWS)
         self.reveal_btn.setCursor(Qt.PointingHandCursor)
         self.reveal_btn.setStyleSheet(T.ghost_btn_qss())
         self.reveal_btn.clicked.connect(self._reveal_wifi)
         self.col.insertWidget(self.col.count() - 1, self.reveal_btn)
-        self.wifi_note = QLabel("saved networks on this PC · your own credentials")
+        note = (
+            "saved networks on this PC · your own credentials"
+            if _IS_WINDOWS else "saved Wi-Fi password reveal is Windows-only"
+        )
+        self.wifi_note = QLabel(note)
         self.wifi_note.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:7pt '{T.MONO}';")
         self.col.insertWidget(self.col.count() - 1, self.wifi_note)
 

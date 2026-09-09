@@ -1,10 +1,12 @@
 # Overlay HUD
 
-A Cluely / Interview-Coder-style **overlay** for Windows 11: a borderless,
-translucent, always-on-top window that is **excluded from screen capture** —
-it does not appear in Zoom / Teams / Meet / Discord screen-share or OBS
-Display/Window Capture, while staying fully visible to you on the physical
-screen.
+A borderless, translucent, always-on-top utility overlay. It supports Windows
+11 and Arch Linux, including Hyprland.
+
+On Windows 10 2004+ it can ask the compositor to exclude the overlay window
+from normal screen capture. On Arch Linux there is no equivalent standard
+per-window API exposed to regular apps, so the overlay runs normally but
+screen-capture hiding is shown as unsupported.
 
 It carries four top-level tabs:
 
@@ -26,17 +28,16 @@ It carries four top-level tabs:
   **persistent profile**: sign in once and it sticks, no API key. A **"Use my
   browser login"** button reuses the ChatGPT session already in your Chrome/
   Edge/Firefox (read locally, on your click) so you don't have to type
-  anything. Because it lives inside the capture-excluded window, it's hidden
-  from screen-share too.
+  anything.
 - **SETTINGS** — transparency slider, show/hide each graph, filled-vs-line
-  graphs, capture-exclusion / click-through / always-on-top toggles, telemetry
+  graphs, capture hiding status, click-through / always-on-top toggles, telemetry
   sample rate, and ping target. Persists to `_settings.json`.
 
 The header **⋯** button is a **quick launch** menu — pin folders, files, or
 links (e.g. a resume folder) and open them instantly; links open as a tab in
 the embedded browser, folders/files open in Explorer / their default app.
 
-## Run
+## Run on Windows
 
 ```bash
 pip install -r requirements.txt
@@ -50,50 +51,112 @@ hides it, quit from the tray menu.
 Requires **Windows 10 build 19041 (2004) or newer** for the
 `WDA_EXCLUDEFROMCAPTURE` capture-exclusion flag, and Python 3.9+.
 
-## Global hotkeys (work even when unfocused)
+## Run on Arch Linux / Hyprland
+
+Install Qt/PySide and the small command-line tools used by the panels:
+
+```bash
+sudo pacman -S python python-pyside6 python-pyside6-webengine iputils traceroute net-tools
+python -m pip install --user browser_cookie3 colorama
+cd Overlay
+python main.py
+```
+
+If your PySide packages come from `pip` instead of `pacman`, use:
+
+```bash
+python -m pip install --user -r requirements.txt
+```
+
+Hyprland owns global keybinds, so the app exposes a local command interface
+that Hyprland can call. Print bind lines from your current overlay settings:
+
+```bash
+cd Overlay
+python main.py --print-hyprland-binds
+```
+
+Add the printed lines to `~/.config/hypr/hyprland.conf`, then reload:
+
+```bash
+hyprctl reload
+```
+
+**Required window rule.** Hyprland tiles new windows by default, so without a
+rule the HUD opens as just another tile/tab in your workspace instead of
+floating on top. Add a float rule matching the window title `sysmon-overlay`.
+
+If you use the classic `~/.config/hypr/hyprland.conf`:
+
+```ini
+windowrulev2 = float, title:^(sysmon-overlay)$
+windowrulev2 = pin, title:^(sysmon-overlay)$
+```
+
+If you use a Lua-based config (`~/.config/hypr/hyprland.lua`, newer Hyprland
+builds — `hyprctl keyword` will refuse to work on these with "keyword can't
+work with non-legacy parsers", so this rule has to live in the config file,
+not be poked in at runtime):
+
+```lua
+hl.window_rule({
+    name = "sysmon-overlay-float",
+    match = { title = "^sysmon-overlay$" },
+    float = true,
+    pin = true,
+})
+```
+
+Then reload:
+
+```bash
+hyprctl reload
+```
+
+## Global hotkeys
 
 | Hotkey | Action |
 |---|---|
-| `Ctrl+Alt+\` | show / hide the HUD |
+| `Alt+Y` | show / hide the HUD |
+| `Alt+T` | next tab |
 | `Ctrl+Alt+H` | **panic**: hide instantly and drop the capture flag |
 | `Ctrl+Alt+C` | toggle click-through (mouse passes through the overlay) |
-| `Ctrl+Alt+X` | toggle capture-exclusion on/off (A/B test it in a share) |
+| `Ctrl+Alt+X` | toggle capture-exclusion on/off where supported |
 | `Ctrl+Alt+←↑↓→` | nudge the window 20 px |
 
 Drag the header to move it; drag the bottom-right grip to resize. The header
-badge reads **HIDDEN** (excluded) or **VISIBLE** (excluded off).
+badge reads **HIDDEN** (excluded), **VISIBLE** (excluded off), or
+**UNSUPPORTED** on platforms without capture-exclusion support.
 
-## How "undetectable" actually works — and its limits
+## Capture hiding limits
 
-The mechanism is one Win32 call in `win_stealth.py`:
-`SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)`. This is the same
-technique Interview Coder / Cluely use. The desktop compositor then leaves
-the window out of every standard capture path — BitBlt, DXGI Desktop
-Duplication, and the Windows Graphics Capture API — which is what Zoom,
-Teams, Meet, Discord, and OBS all use. To them the window simply isn't there.
+On Windows, the mechanism is one Win32 call:
+`SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)`. The desktop
+compositor then leaves the window out of standard Windows capture paths.
 
-**It is not true invisibility. Be honest with yourself about this:**
+This is not true invisibility:
 
 - A **phone or camera pointed at your monitor** still sees it — it's only the
-  digital capture path that's blocked.
+  Windows digital capture path that's blocked.
 - **Kernel-level anti-cheat and dedicated proctoring software** (lockdown
   exam browsers, some enterprise monitors) can detect the *process or the
   window*, and can even query this affinity flag directly. This tool does
   nothing to hide the process, and does not attempt to evade such software.
 - It is a **per-window compositor flag**, not OS-wide stealth.
+- Hyprland/Wayland does not provide this Windows compositor flag.
 
-So this is *hidden from screen-share*, not *undetectable by all means*. Use it
-where that distinction is legal and appropriate.
+Use it only where it is legal and appropriate.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `main.py` | App bootstrap, tray icon, wires hotkeys to the window |
-| `overlay_window.py` | Frameless translucent HUD, tabs, drag/resize, stealth |
-| `win_stealth.py` | ctypes: `SetWindowDisplayAffinity`, click-through, tool-window |
-| `hotkeys.py` | Global `RegisterHotKey` via a Qt native event filter |
-| `netstat.py` | Dependency-free network byte counters (iphlpapi `GetIfTable`) |
+| `main.py` | App bootstrap, tray icon, local IPC, native/Hyprland hotkeys |
+| `overlay/window.py` | Frameless translucent HUD, tabs, drag/resize, window flags |
+| `overlay/core/stealth.py` | Windows capture exclusion; cross-platform click-through helper |
+| `overlay/hotkeys.py` | Windows `RegisterHotKey`; no-op elsewhere |
+| `overlay/ipc.py` | Local command socket used by Hyprland bind commands |
+| `overlay/core/netstat.py` | Dependency-free network byte counters for Windows and Linux |
 | `theme.py` | Design system — the monochrome palette, fonts, and Qt style helpers every panel reads from |
 | `widgets.py` | QPainter `Sparkline` and `Gauge` (no pyqtgraph/numpy) |
 | `settings.py` | Reactive settings store (JSON-persisted) driving the Settings tab |
