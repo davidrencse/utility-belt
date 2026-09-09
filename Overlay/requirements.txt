@@ -1,0 +1,10 @@
+# Overlay HUD dependencies.
+# The PySide6 metapackage pulls Essentials + Addons (which includes
+# QtWebEngine, needed for the ChatGPT panel). If you only have PySide6-
+# Essentials, add PySide6-Addons explicitly.
+PySide6>=6.6
+# Optional: colored CLI output for the reused port_scanner.py engine.
+colorama>=0.4.6
+# Optional: enables the ChatGPT panel's "Use my browser login" button, which
+# reuses your existing Chrome/Edge/Firefox ChatGPT session locally, on click.
+browser_cookie3>=0.19.1
