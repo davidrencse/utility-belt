@@ -37,6 +37,7 @@ DEFAULTS = {
     # customizable global hotkeys (action id -> combo string, e.g. "alt+y").
     "hotkeys": {
         "toggle_visible": "alt+y",
+        "analyze": "alt+a",
         "cycle_tab": "alt+t",
         "capture": "ctrl+alt+x",
         "click_through": "ctrl+alt+c",

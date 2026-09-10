@@ -37,6 +37,7 @@ for _i in range(1, 13):      # F1..F12
 # action id -> human label (order defines the Settings list)
 ACTIONS = [
     ("toggle_visible", "Show / hide overlay"),
+    ("analyze", "Capture screen → ChatGPT"),
     ("cycle_tab", "Next tab"),
     ("capture", "Toggle screen-capture hiding"),
     ("click_through", "Toggle click-through"),

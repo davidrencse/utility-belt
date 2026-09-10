@@ -8,6 +8,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 SOCKET_NAME = f"sysmon-overlay-{getpass.getuser()}"
 VALID_COMMANDS = {
     "toggle_visible",
+    "analyze",
     "cycle_tab",
     "capture",
     "click_through",

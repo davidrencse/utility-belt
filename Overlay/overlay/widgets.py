@@ -47,8 +47,6 @@ class Sparkline(QWidget):
         self._fill = fill
         self._label = ""
         self._value = ""
-        # cache fonts once - these widgets repaint every sample
-        self._f_hdr = QFont(T.MONO, 7, QFont.Bold)
         self.setMinimumHeight(46)
 
     def set_fill(self, on):
@@ -75,8 +73,9 @@ class Sparkline(QWidget):
         p.setRenderHint(QPainter.Antialiasing, True)
         r = self.rect()
 
-        # header row: label left, value right
-        p.setFont(self._f_hdr)
+        # header row: label left, value right (font scales with height = zoom)
+        hpt = max(7, min(15, int(r.height() * 0.16)))
+        p.setFont(QFont(T.MONO, hpt, QFont.Bold))
         p.setPen(T.TEXT_DIM)
         p.drawText(r.adjusted(1, 1, -1, 0), Qt.AlignLeft | Qt.AlignTop,
                    self._label.upper())
@@ -85,7 +84,8 @@ class Sparkline(QWidget):
             p.drawText(r.adjusted(1, 1, -1, 0), Qt.AlignRight | Qt.AlignTop,
                        self._value)
 
-        plot = QRectF(r.left() + 1, r.top() + 16, r.width() - 2, r.height() - 20)
+        top = hpt + 9
+        plot = QRectF(r.left() + 1, r.top() + top, r.width() - 2, r.height() - top - 4)
         # hairline baseline
         p.setPen(QPen(QColor(255, 255, 255, 20), 1))
         p.drawLine(QPointF(plot.left(), plot.bottom()),
@@ -144,11 +144,6 @@ class Gauge(QWidget):
         self._title = title
         self._sub = ""
         self.setMinimumSize(88, 96)
-        # cache fonts (repainted on every animation frame)
-        self._f_num = QFont(T.UI, 14); self._f_num.setBold(True)
-        self._f_sub = QFont(T.MONO, 7)
-        self._f_title = QFont(T.MONO, 7, QFont.Bold)
-        self._f_title.setLetterSpacing(QFont.AbsoluteSpacing, 1.5)
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(460)
         self._anim.setEasingCurve(QEasingCurve.OutCubic)
@@ -170,36 +165,45 @@ class Gauge(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         side = min(self.width(), self.height() - 12)
-        rect = QRectF((self.width() - side) / 2 + 5, 3, side - 10, side - 10)
+        # fonts + stroke scale with the gauge size, so resizing zooms it
+        aw = max(4.0, side * 0.055)
+        num_pt = max(9, int(side * 0.16))
+        small_pt = max(6, int(side * 0.085))
+        off = side * 0.075
+        rect = QRectF((self.width() - side) / 2 + aw, aw - 2,
+                      side - 2 * aw, side - 2 * aw)
         col = _ramp(self._shown)
         span = int(-270 * 16 * (self._shown / 100.0))
 
         # track
-        pen_bg = QPen(QColor(255, 255, 255, 22), 5)
+        pen_bg = QPen(QColor(255, 255, 255, 22), aw)
         pen_bg.setCapStyle(Qt.RoundCap)
         p.setPen(pen_bg)
         p.drawArc(rect, 225 * 16, -270 * 16)
 
         # progress
-        pen_fg = QPen(col, 5)
+        pen_fg = QPen(col, aw)
         pen_fg.setCapStyle(Qt.RoundCap)
         p.setPen(pen_fg)
         p.drawArc(rect, 225 * 16, span)
 
         # numeric (nudged up so the sub-value fits beneath)
+        fnum = QFont(T.UI, num_pt); fnum.setBold(True)
         p.setPen(T.TEXT)
-        p.setFont(self._f_num)
-        p.drawText(rect.adjusted(0, -7, 0, -7), Qt.AlignCenter, f"{self._shown:.0f}%")
+        p.setFont(fnum)
+        p.drawText(rect.adjusted(0, -off, 0, -off), Qt.AlignCenter, f"{self._shown:.0f}%")
 
         if self._sub:
             p.setPen(T.TEXT_DIM)
-            p.setFont(self._f_sub)
-            p.drawText(rect.adjusted(0, 14, 0, 14), Qt.AlignHCenter | Qt.AlignVCenter,
-                       self._sub)
+            p.setFont(QFont(T.MONO, small_pt))
+            p.drawText(rect.adjusted(0, off * 2, 0, off * 2),
+                       Qt.AlignHCenter | Qt.AlignVCenter, self._sub)
 
         # title beneath the gauge
+        ftitle = QFont(T.MONO, small_pt, QFont.Bold)
+        ftitle.setLetterSpacing(QFont.AbsoluteSpacing, 1.5)
         p.setPen(T.TEXT_MUTED)
-        p.setFont(self._f_title)
+        p.setFont(ftitle)
         p.drawText(self.rect().adjusted(0, self.height() - 12, 0, 0),
                    Qt.AlignHCenter | Qt.AlignTop, self._title)
         p.end()

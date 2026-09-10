@@ -10,11 +10,15 @@ Reused as-is:
                 RateLimiter, get_service_name()
   net_recon   : ping_host(), traceroute()
   geoip       : locate()
+
+Same trick for two more siblings: StegKit (../Steganography-Multi-Tool) and
+Asphalt (../Asphalt), the packet capture/decode/analysis toolkit.
 """
 import os
 import platform
 import subprocess
 import sys
+from types import SimpleNamespace
 
 # --- suppress flashing console windows -------------------------------------
 # The engine (net_recon.ping_host, arp, tracert, and system_info's PowerShell
@@ -74,3 +78,56 @@ except Exception as exc:        # pragma: no cover - surfaced in the UI
     STEGO_OK = False
     STEGO_ERROR = f"{type(exc).__name__}: {exc}"
     stego_image = stego_text = stego_errors = None
+
+
+# --- Asphalt packet capture / analysis (sibling repo, imported lazily) -----
+# Asphalt's modules address each other by top-level name (models.packet,
+# capture.decoder, analysis.engine), so its src/ goes on sys.path exactly like
+# its own CLI launcher does - appended, not inserted, since names like `utils`
+# and `models` are generic enough to shadow something else.
+_SNIFF_DIR = os.path.normpath(os.path.join(PROJECT_ROOT, "Asphalt", "src"))
+if os.path.isdir(_SNIFF_DIR) and _SNIFF_DIR not in sys.path:
+    sys.path.append(_SNIFF_DIR)
+
+SNIFF_DIR = _SNIFF_DIR
+SNIFF_OK = None                 # None = not attempted yet
+SNIFF_ERROR = None
+SNIFF_HAS_SCAPY = False
+_sniff_api = None
+
+
+def load_sniffer():
+    """Import Asphalt on first use and return its entry points (or None).
+
+    Deferred rather than imported at module scope because pulling in scapy
+    costs about a second - the HUD should not pay that on every launch, only
+    when someone actually opens the sniffer.
+    """
+    global SNIFF_OK, SNIFF_ERROR, SNIFF_HAS_SCAPY, _sniff_api
+    if SNIFF_OK is not None:
+        return _sniff_api
+    try:
+        from capture.scapy_backend import ScapyBackend, SCAPY_AVAILABLE  # noqa: E402
+        from capture.icapture_backend import CaptureConfig               # noqa: E402
+        from capture.decoder import PacketDecoder                        # noqa: E402
+        from models.packet import RawPacket                              # noqa: E402
+        from analysis.engine import AnalysisEngine                       # noqa: E402
+        from analysis.registry import create_analyzer                    # noqa: E402
+        from utils.filtering import compile_packet_filter                # noqa: E402
+    except Exception as exc:    # pragma: no cover - surfaced in the UI
+        SNIFF_OK = False
+        SNIFF_ERROR = f"{type(exc).__name__}: {exc}"
+        return None
+
+    SNIFF_OK = True
+    SNIFF_HAS_SCAPY = bool(SCAPY_AVAILABLE)
+    _sniff_api = SimpleNamespace(
+        ScapyBackend=ScapyBackend,
+        CaptureConfig=CaptureConfig,
+        PacketDecoder=PacketDecoder,
+        RawPacket=RawPacket,
+        AnalysisEngine=AnalysisEngine,
+        create_analyzer=create_analyzer,
+        compile_packet_filter=compile_packet_filter,
+    )
+    return _sniff_api

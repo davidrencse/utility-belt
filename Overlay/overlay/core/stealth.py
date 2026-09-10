@@ -77,11 +77,16 @@ def _set_exstyle(hwnd, style):
 
 
 def apply_tool_window(win):
-    """Drop the window from the taskbar / alt-tab list."""
+    """Drop the window from the taskbar / alt-tab list.
+
+    NOTE: intentionally does NOT set WS_EX_NOACTIVATE. That flag stops the
+    window from ever activating, which also blocks keyboard focus - so the
+    embedded ChatGPT webview could never receive typing. Keeping the window
+    activatable is required for typing / logging in."""
     if not IS_WINDOWS:
         return False
     hwnd = _hwnd(win)
-    style = _get_exstyle(hwnd) | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+    style = (_get_exstyle(hwnd) | WS_EX_TOOLWINDOW) & ~WS_EX_NOACTIVATE
     _set_exstyle(hwnd, style)
     return True
 

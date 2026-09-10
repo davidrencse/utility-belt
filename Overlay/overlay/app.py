@@ -126,6 +126,7 @@ def main():
 
     _dispatch = {
         "toggle_visible": win.toggle_visible,
+        "analyze": lambda: win.capture_analyze("deep"),
         "cycle_tab": win.cycle_tab,
         "capture": win.toggle_capture,
         "click_through": win.toggle_click_through,

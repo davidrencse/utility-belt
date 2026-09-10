@@ -110,10 +110,16 @@ class MetricsPanel(QWidget):
         self.sampler.start()
 
     def _build(self):
+        # horizontal layout: gauges on the left, live graphs filling the right
         root = QVBoxLayout(self)
-        root.setContentsMargins(14, 10, 14, 12)
-        root.setSpacing(14)
+        root.setContentsMargins(14, 10, 14, 10)
+        root.setSpacing(8)
 
+        content = QHBoxLayout()
+        content.setSpacing(16)
+
+        left = QVBoxLayout()
+        left.setSpacing(10)
         gauges = QHBoxLayout()
         gauges.setSpacing(10)
         self.g_cpu = Gauge("CPU")
@@ -121,18 +127,25 @@ class MetricsPanel(QWidget):
         self.g_disk = Gauge("DISK")
         for g in (self.g_cpu, self.g_mem, self.g_disk):
             gauges.addWidget(g)
-        root.addLayout(gauges)
+        left.addLayout(gauges)
+        left.addStretch(1)
+        self.status = QLabel("starting…")
+        self.status.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:8pt '{T.MONO}';")
+        self.status.setWordWrap(True)
+        left.addWidget(self.status)
+        content.addLayout(left)
 
+        right = QVBoxLayout()
+        right.setSpacing(10)
         self.sp_cpu = Sparkline(color=T.G_CPU, floor=100, unit="%")
         self.sp_ping = Sparkline(color=T.G_PING, floor=50, unit="ms")
         self.sp_net = Sparkline(color=T.G_NET, floor=1.0, unit="")
         for sp in (self.sp_cpu, self.sp_ping, self.sp_net):
-            root.addWidget(sp)
+            sp.setMinimumHeight(56)
+            right.addWidget(sp, 1)
+        content.addLayout(right, 1)
 
-        self.status = QLabel("starting…")
-        self.status.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:8pt '{T.MONO}';")
-        root.addWidget(self.status)
-        root.addStretch(1)
+        root.addLayout(content, 1)
 
         if not eng.ENGINE_OK:
             self.status.setText("engine import FAILED: " + str(eng.ENGINE_ERROR))
