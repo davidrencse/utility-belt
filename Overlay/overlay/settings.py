@@ -22,6 +22,8 @@ DEFAULTS = {
     "show_ping": True,
     "show_net": True,
     "start_tab": 0,          # tab shown on launch
+    "reduce_motion": False,  # snap instead of spring/fade (motion.py)
+    "screenshot_keep": 200,  # newest screenshots kept on disk (screenshots.py)
     # behaviour / stealth
     "capture_exclusion": _IS_WINDOWS,
     "click_through": False,
@@ -30,7 +32,6 @@ DEFAULTS = {
     "sample_ms": 1000,       # telemetry cadence (500 / 1000 / 2000)
     # data
     "ping_target": "8.8.8.8",
-    "vt_api_key": "",        # optional VirusTotal API key for inline stats
     # quick launch: list of {"label": str, "path": str}; path may be a folder,
     # a file, or an http(s) URL. Opened from the header menu.
     "shortcuts": [],
@@ -38,6 +39,7 @@ DEFAULTS = {
     "hotkeys": {
         "toggle_visible": "alt+y",
         "analyze": "alt+a",
+        "screenshot": "alt+s",
         "cycle_tab": "alt+t",
         "capture": "ctrl+alt+x",
         "click_through": "ctrl+alt+c",
@@ -64,6 +66,10 @@ class Settings(QObject):
                 saved = json.load(f)
             for k, v in saved.items():
                 if k in DEFAULTS and isinstance(v, type(DEFAULTS[k])):
+                    if isinstance(v, dict):
+                        # keep defaults for keys added after this file was
+                        # saved (e.g. a new hotkey action)
+                        v = {**DEFAULTS[k], **v}
                     self._d[k] = v
         except (OSError, ValueError):
             pass

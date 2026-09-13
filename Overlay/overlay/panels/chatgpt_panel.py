@@ -261,12 +261,7 @@ class ChatGPTPanel(QWidget):
     def _show_capture_menu(self):
         from .. import theme as T
         menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu{{background:{T.hexs(T.SURFACE_2)};color:{T.hexs(T.TEXT)};"
-            f"border:1px solid {T.hexs(T.BORDER)};border-radius:8px;padding:4px;"
-            f"font:9pt '{T.UI}';}}"
-            f"QMenu::item{{padding:5px 16px;border-radius:5px;}}"
-            f"QMenu::item:selected{{background:{T.rgba(T.ACCENT_SOFT)};}}")
+        menu.setStyleSheet(T.menu_qss())
         for mode, label in (("deep", "Deep study notes"),
                             ("summary", "Summarize"),
                             ("cold", "Cold / Absolute mode")):

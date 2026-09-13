@@ -9,6 +9,7 @@ SOCKET_NAME = f"sysmon-overlay-{getpass.getuser()}"
 VALID_COMMANDS = {
     "toggle_visible",
     "analyze",
+    "screenshot",
     "cycle_tab",
     "capture",
     "click_through",

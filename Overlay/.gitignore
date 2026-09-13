@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 overlay/_webprofile/
+overlay/_webprofile_vt/
 overlay/_settings.json
+overlay/_screenshots/

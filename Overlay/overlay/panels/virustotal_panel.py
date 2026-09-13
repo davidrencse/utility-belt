@@ -1,192 +1,133 @@
 """
-VirusTotal panel - drag a file in and see its VirusTotal report.
+VirusTotal panel - just the VirusTotal website in an embedded Chromium view,
+the same way the CHAT tab embeds chatgpt.com. No API, no key, no local
+hashing: upload files, search hashes/URLs and read reports exactly as you
+would in a browser.
 
-Privacy-first and keyless by default: the file is hashed LOCALLY (SHA-256)
-and only the hash is used - the file itself never leaves the machine. The
-panel opens the public VirusTotal report for that hash in an embedded browser.
-
-If you paste a free VirusTotal API key in Settings, it additionally queries
-the API (v3 GET /files/{hash}) on a worker thread and shows a compact
-detection banner (malicious / suspicious / harmless) above the report.
+Persistent profile (separate from ChatGPT's) so a VirusTotal sign-in and its
+cookie/consent choices survive restarts. A few webview gaps are closed so it
+behaves like a real browser tab:
+  * the site's "Choose file" button opens a file picker parented to the
+    overlay (so the hover menu stays open while you pick)
+  * `target=_blank` links open in this same view instead of doing nothing
+  * a file dropped outside VT's drop zone doesn't navigate the tab away to
+    file:// (the drop zone itself still accepts drag & drop)
 """
-import hashlib
-import json
-import urllib.request
+import os
 
-from PySide6.QtCore import QThread, Signal, Qt, QUrl
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                               QPushButton, QLineEdit, QFileDialog)
 
 from .. import theme as T
-from ..settings import settings
 
 try:
     from PySide6.QtWebEngineWidgets import QWebEngineView
+    from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
     WEBENGINE_OK = True
+    WEBENGINE_ERR = None
 except Exception as exc:  # pragma: no cover
     WEBENGINE_OK = False
     WEBENGINE_ERR = f"{type(exc).__name__}: {exc}"
 
-_GUI = "https://www.virustotal.com/gui/file/{}"
-_API = "https://www.virustotal.com/api/v3/files/{}"
+HOME_URL = "https://www.virustotal.com/gui/home/upload"
+_SEARCH_URL = "https://www.virustotal.com/gui/search/"
+_PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "_webprofile_vt")
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 
 
-class VtWorker(QThread):
-    hashed = Signal(str, str)      # sha256, filename
-    stats = Signal(dict)           # last_analysis_stats
-    note = Signal(str)
+if WEBENGINE_OK:
+    class _VtPage(QWebEnginePage):
+        def __init__(self, profile, view):
+            super().__init__(profile, view)
+            self._view = view
 
-    def __init__(self, path, api_key, parent=None):
-        super().__init__(parent)
-        self._path, self._key = path, api_key
+        def chooseFiles(self, mode, old_files, mime_types):
+            parent = self._view.window()
+            if mode == QWebEnginePage.FileSelectionMode.FileSelectOpenMultiple:
+                files, _ = QFileDialog.getOpenFileNames(parent, "Choose files for VirusTotal")
+                return files
+            path, _ = QFileDialog.getOpenFileName(parent, "Choose a file for VirusTotal")
+            return [path] if path else []
 
-    def run(self):
-        import os
-        try:
-            h = hashlib.sha256()
-            with open(self._path, "rb") as f:
-                for chunk in iter(lambda: f.read(1 << 20), b""):
-                    h.update(chunk)
-            digest = h.hexdigest()
-        except OSError as exc:
-            self.note.emit(f"couldn't read file: {exc}")
-            return
-        self.hashed.emit(digest, os.path.basename(self._path))
+        def createWindow(self, _type):
+            return self                       # open new-tab links in place
 
-        if not self._key:
-            self.note.emit("keyless: showing the public report. Add a VT API "
-                           "key in Settings for inline detection stats.")
-            return
-        try:
-            req = urllib.request.Request(_API.format(digest),
-                                         headers={"x-apikey": self._key})
-            with urllib.request.urlopen(req, timeout=15) as r:
-                payload = json.loads(r.read().decode("utf-8", "replace"))
-            stats = (payload.get("data", {}).get("attributes", {})
-                     .get("last_analysis_stats"))
-            if stats:
-                self.stats.emit(stats)
-            else:
-                self.note.emit("VT had no analysis stats for this file yet.")
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                self.note.emit("not in VirusTotal yet — open the report to upload it.")
-            elif exc.code == 401:
-                self.note.emit("VT API key rejected (401). Check it in Settings.")
-            else:
-                self.note.emit(f"VT API error: HTTP {exc.code}")
-        except Exception as exc:
-            self.note.emit(f"VT lookup failed: {type(exc).__name__}")
+        def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+            if is_main_frame and url.scheme() == "file":
+                return False                  # stray drop: stay on VirusTotal
+            return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
 
 class VirusTotalPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.worker = None
-        self.setAcceptDrops(True)
-        self._build()
-
-    def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 10)
-        root.setSpacing(7)
+        root.setContentsMargins(8, 6, 8, 8)
+        root.setSpacing(6)
 
-        # drop zone
-        self.drop = QLabel("⤓  drag a file here to scan  ·  or")
-        self.drop.setAlignment(Qt.AlignCenter)
-        self.drop.setStyleSheet(
-            f"color:{T.hexs(T.TEXT_MUTED)};font:9pt '{T.UI}';"
-            f"border:1px dashed {T.hexs(T.BORDER)};border-radius:{T.R_CTRL}px;"
-            f"padding:12px;")
-        row = QHBoxLayout(); row.setSpacing(8)
-        row.addWidget(self.drop, 1)
-        self.pick = QPushButton("Choose file…")
-        self.pick.setCursor(Qt.PointingHandCursor)
-        self.pick.setStyleSheet(T.ghost_btn_qss())
-        self.pick.clicked.connect(self._choose)
-        row.addWidget(self.pick)
-        root.addLayout(row)
-
-        self.banner = QLabel("")
-        self.banner.setStyleSheet(f"color:{T.hexs(T.TEXT)};font:700 9pt '{T.MONO}';")
-        self.banner.hide()
-        root.addWidget(self.banner)
-
-        self.status = QLabel("no file scanned yet")
-        self.status.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:8pt '{T.MONO}';")
-        self.status.setWordWrap(True)
-        root.addWidget(self.status)
-
-        if WEBENGINE_OK:
-            self.view = QWebEngineView(self)
-            self.view.hide()
-            root.addWidget(self.view, 1)
-        else:
+        if not WEBENGINE_OK:
+            msg = QLabel("QtWebEngine is not available.\n\n" + str(WEBENGINE_ERR) +
+                         "\n\nInstall it with:  pip install PySide6-Addons")
+            msg.setWordWrap(True)
+            msg.setAlignment(Qt.AlignCenter)
+            msg.setStyleSheet(T.label_qss("muted") + "padding:20px;")
+            root.addWidget(msg)
             self.view = None
-            root.addWidget(QLabel("QtWebEngine unavailable: " + str(WEBENGINE_ERR)))
-        root.addStretch(0)
-
-    # -- drag & drop -------------------------------------------------------
-    def dragEnterEvent(self, e):
-        if e.mimeData().hasUrls():
-            e.acceptProposedAction()
-            self.drop.setStyleSheet(
-                f"color:{T.hexs(T.TEXT)};font:9pt '{T.UI}';"
-                f"border:1px dashed {T.hexs(T.ACCENT)};border-radius:{T.R_CTRL}px;"
-                f"padding:12px;")
-
-    def dragLeaveEvent(self, _e):
-        self._reset_drop_style()
-
-    def dropEvent(self, e):
-        self._reset_drop_style()
-        urls = e.mimeData().urls()
-        if urls:
-            path = urls[0].toLocalFile()
-            if path:
-                self._scan(path)
-
-    def _reset_drop_style(self):
-        self.drop.setStyleSheet(
-            f"color:{T.hexs(T.TEXT_MUTED)};font:9pt '{T.UI}';"
-            f"border:1px dashed {T.hexs(T.BORDER)};border-radius:{T.R_CTRL}px;"
-            f"padding:12px;")
-
-    # -- actions -----------------------------------------------------------
-    def _choose(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Choose a file to scan")
-        if path:
-            self._scan(path)
-
-    def _scan(self, path):
-        if self.worker and self.worker.isRunning():
             return
-        self.banner.hide()
-        self.status.setText("hashing file locally…")
-        self.worker = VtWorker(path, settings.get("vt_api_key") or "", self)
-        self.worker.hashed.connect(self._on_hashed)
-        self.worker.stats.connect(self._on_stats)
-        self.worker.note.connect(self.status.setText)
-        self.worker.start()
 
-    def _on_hashed(self, digest, name):
-        self.status.setText(f"{name}  ·  sha256 {digest[:16]}…  (only the hash is sent)")
-        if self.view:
-            self.view.setUrl(QUrl(_GUI.format(digest)))
-            self.view.show()
+        bar = QHBoxLayout()
+        bar.setSpacing(6)
+        back = QPushButton("‹")
+        back.setFixedSize(28, 26)
+        back.setToolTip("Back")
+        back.setAccessibleName("Back")
+        back.setStyleSheet(T.icon_btn_qss())
+        self.url = QLineEdit(HOME_URL)
+        self.url.setPlaceholderText("URL, or a hash / domain / IP to search")
+        self.url.setStyleSheet(T.input_qss(height=22))
+        self.url.returnPressed.connect(self._go)
+        home = QPushButton("VirusTotal")
+        reload_b = QPushButton("Reload")
+        for b in (home, reload_b):
+            b.setStyleSheet(T.ghost_btn_qss())
+        for b in (back, home, reload_b):
+            b.setCursor(Qt.PointingHandCursor)
+        bar.addWidget(back)
+        bar.addWidget(self.url, 1)
+        bar.addWidget(home)
+        bar.addWidget(reload_b)
+        root.addLayout(bar)
 
-    def _on_stats(self, stats):
-        mal = stats.get("malicious", 0)
-        susp = stats.get("suspicious", 0)
-        harm = stats.get("harmless", 0)
-        undet = stats.get("undetected", 0)
-        total = mal + susp + harm + undet
-        verdict = "CLEAN" if mal == 0 and susp == 0 else f"{mal} MALICIOUS"
-        self.banner.setText(f"{verdict}   ·   {mal} malicious / {susp} suspicious "
-                            f"/ {harm} harmless   of {total} engines")
-        color = T.DANGER if mal else (T.WARN if susp else T.POSITIVE)
-        self.banner.setStyleSheet(f"color:{T.hexs(color)};font:700 9pt '{T.MONO}';")
-        self.banner.show()
+        os.makedirs(_PROFILE_DIR, exist_ok=True)
+        self.profile = QWebEngineProfile("overlay_virustotal", self)
+        self.profile.setPersistentStoragePath(os.path.abspath(_PROFILE_DIR))
+        self.profile.setCachePath(os.path.abspath(os.path.join(_PROFILE_DIR, "cache")))
+        self.profile.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
+        self.profile.setHttpUserAgent(_UA)
+
+        self.view = QWebEngineView(self)
+        self.view.setPage(_VtPage(self.profile, self.view))
+        self.view.urlChanged.connect(lambda u: self.url.setText(u.toString()))
+        back.clicked.connect(self.view.back)
+        home.clicked.connect(lambda: self._load(HOME_URL))
+        reload_b.clicked.connect(self.view.reload)
+        self.view.setUrl(QUrl(HOME_URL))
+        root.addWidget(self.view, 1)
+
+    def _go(self):
+        self._load(self.url.text().strip())
+
+    def _load(self, text):
+        if not self.view or not text:
+            return
+        if "://" not in text:
+            # a bare hash / domain / IP typed in the bar -> VirusTotal search
+            text = _SEARCH_URL + bytes(QUrl.toPercentEncoding(text)).decode()
+        self.view.setUrl(QUrl(text))
 
     def shutdown(self):
-        if self.worker and self.worker.isRunning():
-            self.worker.wait(2000)
+        if self.view:
+            self.view.stop()

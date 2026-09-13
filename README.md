@@ -1,4 +1,4 @@
-# Undetectable
+# Utility Belt
 
 A collection of standalone security/recon tools. Each subfolder is its own project with its own README, dependencies, and license — this file is just the map.
 
@@ -14,7 +14,10 @@ Educational multi-format steganography CLI. Hides one authenticated payload in P
 Web app that estimates where a photo was taken by fusing EXIF GPS, IPTC/XMP place tags, and an AI visual estimate, then plots ranked candidates on a map (Next.js/TypeScript).
 
 ### [Overlay](Overlay/) (Overlay HUD)
-A borderless, always-on-top utility overlay for Windows and Arch Linux, including Hyprland. Windows supports compositor-level capture exclusion; on Arch Linux the overlay runs normally and uses compositor keybinds via the app's local command socket. Reuses the Port Scanner engine for one of its panels.
+A borderless, always-on-top utility overlay for Windows and Arch Linux, including Hyprland. Windows supports compositor-level capture exclusion; on Arch Linux the overlay runs normally and uses compositor keybinds via the app's local command socket. Reuses the Port Scanner, StegKit and Asphalt engines for its tool panels.
+
+### [Asphalt](Asphalt/)
+Packet capture, decode, and analysis toolkit (Python, CLI + PySide6 desktop UI). Live-captures traffic via Scapy or ingests PCAP/PCAPNG files, decodes L2–L4 fields, and runs a pluggable analyzer suite (flow analytics, TCP handshakes/reliability, DNS anomalies, ARP/LAN signals, scan-signal detection) into JSON reports or live dashboards. Its capture + analysis engine also drives the Overlay HUD's Sniffer panel.
 
 ## Legal & Ethical Notice
 
@@ -27,3 +30,4 @@ Each project directory was originally its own git repository and is tracked here
 - https://github.com/davidrencse/port-scanner
 - https://github.com/davidrencse/Steganography-Multi-Tool
 - https://github.com/davidrencse/osint
+- https://github.com/davidrencse/Asphalt

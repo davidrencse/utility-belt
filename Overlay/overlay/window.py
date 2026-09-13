@@ -9,7 +9,7 @@ transparent window so we control every pixel. A bottom-right grip resizes it.
 import os
 import webbrowser
 
-from PySide6.QtCore import (Qt, QRectF, QPointF, QRect, QTimer,
+from PySide6.QtCore import (Qt, QRectF, QRect, QTimer,
                             QVariantAnimation, QEasingCurve, QPropertyAnimation)
 from PySide6.QtGui import (QPainter, QColor, QBrush, QPainterPath, QPen,
                            QFont, QFontMetrics, QLinearGradient, QShortcut,
@@ -23,12 +23,21 @@ from .core import stealth as win_stealth
 from .platform_utils import IS_WINDOWS, open_path, runtime_note
 from .settings import settings
 from .panels.system_panel import SystemPanel
-from .panels.tools_panel import ToolsPanel
+from .panels.network_panel import NetworkPanel
+from .panels.intel_panel import IntelPanel
 from .panels.weather_panel import WeatherPanel
 from .panels.chatgpt_panel import ChatGPTPanel
 from .panels.settings_panel import SettingsPanel
 
 PAD = 11  # transparent gutter around the card
+
+
+def web_opacity_frac():
+    """Map the card-opacity setting (110..245 alpha) to a window opacity used
+    while a browser view is shown, so the ChatGPT page is see-through to the
+    same degree as the rest of the card."""
+    a = int(settings.get("card_opacity"))
+    return max(0.42, min(1.0, a / 255.0))
 
 
 class TabBar(QWidget):
@@ -50,12 +59,17 @@ class TabBar(QWidget):
         self._press_idx = -1
         self._press_pos = None
         self._torn = False
-        # animated underline
+        # animated indicator (interpolate a float 0..1 - QVariantAnimation
+        # cannot tween a tuple, so we lerp the geometry ourselves)
         self._ind_x = 0.0
         self._ind_w = 0.0
+        self._from = (0.0, 0.0)
+        self._to = (0.0, 0.0)
         self._anim = QVariantAnimation(self)
-        self._anim.setDuration(180)
+        self._anim.setDuration(200)
         self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
         self._anim.valueChanged.connect(self._on_anim)
         self.setFixedHeight(30)
         self.setMouseTracking(True)
@@ -79,14 +93,17 @@ class TabBar(QWidget):
         if self._ind_w == 0.0:      # first placement - no animation
             self._ind_x, self._ind_w = tx, tw
         else:
+            self._from = (self._ind_x, self._ind_w)
+            self._to = (tx, tw)
             self._anim.stop()
-            self._anim.setStartValue((self._ind_x, self._ind_w))
-            self._anim.setEndValue((tx, tw))
             self._anim.start()
         self.update()
 
-    def _on_anim(self, val):
-        self._ind_x, self._ind_w = val
+    def _on_anim(self, t):
+        t = float(t)
+        (sx, sw), (tx, tw) = self._from, self._to
+        self._ind_x = sx + (tx - sx) * t
+        self._ind_w = sw + (tw - sw) * t
         self.update()
 
     def set_detached(self, indices):
@@ -138,7 +155,13 @@ class TabBar(QWidget):
             hr = QRectF(self.rect()).adjusted(1, 1, -1, -1)
             p.setPen(QPen(QColor(255, 255, 255, 150), 1.4, Qt.DashLine))
             p.setBrush(QBrush(QColor(255, 255, 255, 26)))
-            p.drawRoundedRect(hr, 7, 7)
+            p.drawRoundedRect(hr, 9, 9)
+        # animated segmented pill behind the active tab
+        if self._active not in self._detached and self._ind_w > 0:
+            chip = QRectF(self._ind_x - 12, 3, self._ind_w + 24, self.height() - 7)
+            p.setPen(QPen(QColor(255, 255, 255, 22), 1))
+            p.setBrush(QBrush(QColor(255, 255, 255, 20)))
+            p.drawRoundedRect(chip, chip.height() / 2, chip.height() / 2)
         rects = self._seg_rects()
         f = QFont(T.UI, 8, QFont.Bold)
         f.setLetterSpacing(QFont.AbsoluteSpacing, 1.2)
@@ -150,14 +173,10 @@ class TabBar(QWidget):
             elif i == self._active:
                 p.setPen(T.TEXT)
             elif i == self._hover:
-                p.setPen(T.TEXT_MUTED)
+                p.setPen(T.TEXT)
             else:
-                p.setPen(T.TEXT_DIM)
+                p.setPen(T.TEXT_MUTED)
             p.drawText(r, Qt.AlignCenter, label)
-        if self._active not in self._detached and self._ind_w > 0:
-            y = self.height() - 4
-            p.setPen(QPen(T.TEXT, 2))
-            p.drawLine(QPointF(self._ind_x, y), QPointF(self._ind_x + self._ind_w, y))
         p.end()
 
 
@@ -230,13 +249,15 @@ class OverlayWindow(QWidget):
         # tabs
         self.stack = QStackedWidget()
         self.system = SystemPanel()
-        self.tools = ToolsPanel()
+        self.network = NetworkPanel()
+        self.intel = IntelPanel()
         self.weather = WeatherPanel()
         self.chat = ChatGPTPanel()
         self.settingsp = SettingsPanel()
-        self._panels = [self.system, self.tools, self.weather,
+        self._panels = [self.system, self.network, self.intel, self.weather,
                         self.chat, self.settingsp]
-        self._tabs = [("SYSTEM", self.system), ("TOOLS", self.tools),
+        self._tabs = [("SYSTEM", self.system), ("NETWORK", self.network),
+                      ("INTEL", self.intel),
                       ("WEATHER", self.weather), ("CHAT", self.chat),
                       ("SETTINGS", self.settingsp)]
         self._detached = {}          # panel -> DetachedWindow
@@ -299,9 +320,11 @@ class OverlayWindow(QWidget):
         if panel in self._detached:          # torn-off: raise its own window
             dw = self._detached[panel]
             dw.show(); dw.raise_(); dw.activateWindow()
+            self.setWindowOpacity(1.0)        # main isn't showing the browser
             return
         self.stack.setCurrentWidget(panel)
         self._fade(panel)
+        self._apply_window_opacity()
         # efficiency: only sample telemetry while SYSTEM is the shown tab
         # (or torn off into its own window)
         self.system.set_paused(panel is not self.system
@@ -311,10 +334,20 @@ class OverlayWindow(QWidget):
             self.raise_()
             self.chat.view.setFocus()
 
+    def _apply_window_opacity(self):
+        # A QWebEngineView can't be made partially transparent on its own, so
+        # while the ChatGPT tab is shown the whole window takes the card's
+        # transparency - letting the desktop show through the page. Other tabs
+        # stay fully opaque (their widgets sit over the translucent card).
+        chat_shown = (self._tabs[self._active_tab][1] is self.chat
+                      and self.chat not in self._detached
+                      and getattr(self.chat, "view", None) is not None)
+        self.setWindowOpacity(web_opacity_frac() if chat_shown else 1.0)
+
     def _fade(self, panel):
         # a quick opacity fade-in makes tab switches feel seamless; skip web
         # panels (a graphics effect corrupts QtWebEngine rendering)
-        if panel is self.chat or panel is self.tools:
+        if panel is self.chat or panel is self.intel:
             return
         eff = QGraphicsOpacityEffect(panel)
         panel.setGraphicsEffect(eff)
@@ -426,8 +459,15 @@ class OverlayWindow(QWidget):
         p.fillPath(path, QBrush(grad))
 
         # border: faint white hairline
-        p.setPen(QPen(QColor(255, 255, 255, 60), 1.2))
+        p.setPen(QPen(QColor(255, 255, 255, 55), 1.2))
         p.drawPath(path)
+
+        # top inner highlight - a "lit from above" sheen for depth
+        hl = QPainterPath()
+        hl.addRoundedRect(QRectF(r).adjusted(1.5, 1.5, -1.5, r.height() * -0.5),
+                          T.R_CARD - 2, T.R_CARD - 2)
+        p.setPen(QPen(QColor(255, 255, 255, 22), 1))
+        p.drawPath(hl)
 
         # header divider
         p.setPen(QPen(T.HAIRLINE, 1))
@@ -511,8 +551,8 @@ class OverlayWindow(QWidget):
             return None
         if w is self.chat:
             return getattr(self.chat, "view", None)
-        if w is self.tools:
-            sub = self.tools.stack.currentWidget()
+        if w is self.intel:
+            sub = self.intel.stack.currentWidget()
             return getattr(sub, "view", None)
         return None
 
@@ -626,6 +666,7 @@ class OverlayWindow(QWidget):
     def _on_setting(self, key, value):
         if key == "card_opacity":
             self.update()
+            self._apply_window_opacity()
         elif key == "capture_exclusion":
             self.set_capture(bool(value))
         elif key == "click_through":
@@ -724,6 +765,11 @@ class DetachedWindow(QWidget):
         panel.show()
         outer.addWidget(panel, 1)
 
+        # a torn-off browser panel follows the transparency setting too
+        self._is_web = getattr(panel, "view", None) is not None
+        if self._is_web:
+            settings.changed.connect(self._on_setting_opacity)
+
         foot = QHBoxLayout()
         foot.addStretch(1)
         grip = QSizeGrip(self)
@@ -754,8 +800,14 @@ class DetachedWindow(QWidget):
         p.drawPath(path)
         p.end()
 
+    def _on_setting_opacity(self, key, _value):
+        if key == "card_opacity" and self._is_web:
+            self.setWindowOpacity(web_opacity_frac())
+
     def showEvent(self, e):
         super().showEvent(e)
+        if self._is_web:
+            self.setWindowOpacity(web_opacity_frac())
         if self._apply_pending:
             self._apply_pending = False
             win_stealth.apply_tool_window(self)

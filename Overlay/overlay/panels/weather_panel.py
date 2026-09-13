@@ -269,15 +269,17 @@ class _Tile(QWidget):
         lay.setContentsMargins(11, 8, 11, 8)
         lay.setSpacing(1)
         self._k = QLabel(label.upper())
-        self._k.setStyleSheet(
-            f"color:{T.hexs(T.TEXT_DIM)};font:700 7pt '{T.MONO}';letter-spacing:1px;")
+        self._k.setStyleSheet(T.label_qss("eyebrow"))
         self._v = QLabel("—")
-        self._v.setStyleSheet(f"color:{T.hexs(T.TEXT)};font:600 13pt '{T.UI}';")
+        self._v.setStyleSheet(f"color:{T.hexs(T.TEXT)};font:600 13pt '{T.UI}';"
+                              "background:transparent;border:none;")
         lay.addWidget(self._k)
         lay.addWidget(self._v)
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setObjectName("tile")
         self.setStyleSheet(
-            f"background:{T.rgba(QColor(255,255,255,10))};border-radius:8px;")
+            f"QWidget#tile{{background:{T.rgba(QColor(255,255,255,8))};"
+            f"border:1px solid {T.rgba(T.BORDER_SOFT)};border-radius:{T.R_CTRL + 2}px;}}")
 
     def set(self, v):
         self._v.setText(str(v))
@@ -340,10 +342,11 @@ class WeatherPanel(QWidget):
         self.updated.setStyleSheet(f"color:{T.hexs(T.TEXT_DIM)};font:8pt '{T.MONO}';")
         top.addWidget(self.updated)
         self.refresh_btn = QPushButton("↻")
-        self.refresh_btn.setFixedSize(26, 24)
+        self.refresh_btn.setFixedSize(28, 26)
         self.refresh_btn.setCursor(Qt.PointingHandCursor)
         self.refresh_btn.setToolTip("Refresh")
-        self.refresh_btn.setStyleSheet(T.ghost_btn_qss())
+        self.refresh_btn.setAccessibleName("Refresh")
+        self.refresh_btn.setStyleSheet(T.icon_btn_qss())
         self.refresh_btn.clicked.connect(self.refresh)
         top.addWidget(self.refresh_btn)
         root.addLayout(top)

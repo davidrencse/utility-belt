@@ -38,6 +38,7 @@ for _i in range(1, 13):      # F1..F12
 ACTIONS = [
     ("toggle_visible", "Show / hide overlay"),
     ("analyze", "Capture screen → ChatGPT"),
+    ("screenshot", "Screenshot → history"),
     ("cycle_tab", "Next tab"),
     ("capture", "Toggle screen-capture hiding"),
     ("click_through", "Toggle click-through"),

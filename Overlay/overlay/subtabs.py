@@ -1,31 +1,21 @@
 """
 SubTabHost - a reusable inner tab strip + stacked content area, shared by the
-SYSTEM and TOOLS tabs so the pattern (underline sub-nav, lazy content, child
-shutdown) lives in exactly one place.
+SYSTEM / NETWORK / INTEL / SETTINGS tabs so the pattern (sliding-pill sub-nav, lazy content,
+child shutdown) lives in exactly one place.
 
 items are (label, provider) pairs. `provider` is either a ready QWidget
 (built eagerly) or a zero-arg callable (built lazily on first visit - used for
 panels whose construction is expensive, like the specs query).
+
+Motion: the active pill springs between labels (NavStrip), and the incoming
+page slides in from the side you navigated toward while it fades up.
 """
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                               QStackedWidget, QPushButton)
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget
 
+from . import motion
 from . import theme as T
-
-
-class _SubButton(QPushButton):
-    def __init__(self, text, parent=None):
-        super().__init__(text, parent)
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(
-            f"QPushButton{{background:transparent;color:{T.hexs(T.TEXT_DIM)};"
-            f"border:none;border-bottom:2px solid transparent;padding:3px 12px;"
-            f"font:700 8pt '{T.UI}';}}"
-            f"QPushButton:checked{{color:{T.hexs(T.TEXT)};"
-            f"border-bottom:2px solid {T.hexs(T.TEXT)};}}"
-            f"QPushButton:hover:!checked{{color:{T.hexs(T.TEXT_MUTED)};}}")
+from .nav import NavStrip
 
 
 class SubTabHost(QWidget):
@@ -33,20 +23,19 @@ class SubTabHost(QWidget):
         super().__init__(parent)
         self._providers = [p for _, p in items]
         self._built = [None] * len(items)   # resolved widgets, filled lazily
+        self._current = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 4, 0, 0)
-        root.setSpacing(4)
+        root.setContentsMargins(0, T.S2, 0, 0)
+        root.setSpacing(T.S1)
 
         nav = QHBoxLayout()
-        nav.setContentsMargins(10, 0, 10, 0)
-        nav.setSpacing(2)
-        self._btns = []
-        for i, (label, _) in enumerate(items):
-            b = _SubButton(label)
-            b.clicked.connect(lambda _=False, idx=i: self._select(idx))
-            nav.addWidget(b)
-            self._btns.append(b)
+        nav.setContentsMargins(T.S3, 0, T.S3, 0)
+        self.nav = NavStrip([label for label, _ in items],
+                            font=QFont(T.UI, 8, QFont.DemiBold),
+                            style="pill", height=22, pad_x=11, spacing=1)
+        self.nav.activated.connect(self._select)
+        nav.addWidget(self.nav)
         nav.addStretch(1)
         root.addLayout(nav)
 
@@ -70,10 +59,16 @@ class SubTabHost(QWidget):
         return self._built[idx]
 
     def _select(self, idx):
-        self._resolve(idx)
+        if idx == self._current:
+            return
+        widget = self._resolve(idx)
+        prev = self._current
+        self._current = idx
         self.stack.setCurrentIndex(idx)
-        for i, b in enumerate(self._btns):
-            b.setChecked(i == idx)
+        self.nav.set_active(idx)
+        if prev is not None:
+            direction = 1 if idx > prev else -1
+            motion.reveal(widget, dx=14 * direction, dy=0)
 
     def built_widgets(self):
         return [w for w in self._built if w is not None]

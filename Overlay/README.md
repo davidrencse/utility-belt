@@ -21,7 +21,8 @@ app.
     build, CPU + cores, GPU, RAM, disk, network adapters (IPv4/gateway/MAC/DNS),
     and Wi-Fi — with a **Reveal saved Wi-Fi passwords** button (reads this PC's
     own `netsh` profiles, on your click).
-- **TOOLS** — a utility belt with an inner switch:
+- **NETWORK** — the wire: what's on it and how fast it is:
+  - *Speed Test* — keyless Cloudflare download/upload/latency test.
   - *Port Scan* — thin UI over the reused `Port Scanner` engine (TCP/UDP,
     threads, rate limit, Polite preset, Deep probe); results stream live.
   - *Sniffer* — packet sniffer/analyzer over the reused `Asphalt` engine.
@@ -33,14 +34,19 @@ app.
     NXDOMAIN spikes, high-entropy DNS names, RST storms and half-open
     handshakes, next to protocol mix and top talkers. Needs `scapy` (plus
     Npcap on Windows) and an elevated session.
+- **INTEL** — analysis of files, media and images:
+  - *VirusTotal* — the VirusTotal website embedded like the CHAT tab (no API
+    key): upload files, search hashes/URLs, read reports. Sign-ins persist.
   - *Steganography* — StegKit image (PNG/BMP pixels) and zero-width text
     stego, AES-256-GCM encrypted, encode + decode.
   - *OSINT Geo* — starts the local `osint` Next.js dev server and embeds it
     (needs Node.js + a one-time `npm install`; the AI estimate needs a
     `VISION_API_KEY` in `osint/.env.local`).
-  - *VirusTotal* — drag a file in; it's hashed locally (SHA-256, only the hash
-    is sent) and its VirusTotal report opens. A VT API key in Settings adds an
-    inline verdict.
+- **HISTORY** — *Clipboard* (text you've copied this session, in memory only)
+  and *Screenshots*: press **Alt+S** (rebindable) or *Take screenshot* to save
+  the screen without the overlay in it; Capture → ChatGPT shots land here too.
+  Thumbnail grid with Copy, Send to ChatGPT, Open, Delete. Saved as PNGs in
+  `overlay/_screenshots/` (git-ignored), newest 200 kept.
 - **WEATHER** — current conditions for your location, no API key (ip-api for
   location, Open-Meteo for forecast + air quality): a drawn condition icon, big
   temperature, feels-like, an hourly temperature curve, a wind compass, and
@@ -52,6 +58,11 @@ app.
   imports an existing Chrome/Edge/Firefox session. **Capture ▾** (or `Alt+A`)
   screenshots the screen, pastes it here, and drops in a ready prompt (Deep
   study notes / Summarize / Cold Absolute mode) — review and press Enter.
+- **SETTINGS** — *Display* (transparency, motion, graphs) · *Behavior*
+  (stealth, startup, telemetry) · *Keybinds*.
+
+The banner groups chips as `SYSTEM NETWORK INTEL WEATHER | CHAT SETTINGS` —
+things you look at, then the assistant and app configuration.
 
 The header **⋯** button is a **quick launch** menu — pin folders, files or
 links and open them instantly (links open as a tab in the embedded browser).
@@ -64,8 +75,9 @@ links and open them instantly (links open as a tab in the embedded browser).
   browser tab it zooms the page; elsewhere it scales the whole HUD (gauge and
   graph text is size-relative, so the HUD genuinely zooms).
 - **Tear-off tabs** — drag a tab down/out of the tab bar to pop it into its own
-  standalone window (Chrome-style). Each torn-off window has a **⤢ dock**
-  button (and closing it) to merge back. Detached tabs are marked with **⧉**.
+  standalone window (Chrome-style). Drag that window back over the tab bar (it
+  highlights as a drop target) and release to dock it again; closing it also
+  docks it back. Detached tabs are marked with **⧉**.
 - **Transparency** — a slider in Settings; the desktop shows through the card.
 - **Tray** — closing the window hides it; quit from the tray icon.
 
@@ -139,7 +151,7 @@ Overlay/
     window.py                 frameless HUD: tabs, move/resize, zoom, tear-off
     theme.py                  monochrome design tokens + Qt style helpers
     settings.py               reactive JSON-persisted settings store
-    subtabs.py                shared SubTabHost (SYSTEM / TOOLS inner switch)
+    subtabs.py                shared SubTabHost (inner sub-tab switch)
     widgets.py                QPainter Sparkline + Gauge (size-relative fonts)
     hotkeys.py                Windows RegisterHotKey; customizable bindings
     ipc.py                    local command socket (Hyprland binds)
@@ -153,8 +165,9 @@ Overlay/
       system_panel.py         SYSTEM container (Live + Specs)
       metrics_panel.py        live telemetry (Sampler QThread -> Sample dataclass)
       specs_panel.py          machine info + Wi-Fi
-      tools_panel.py          TOOLS container
-      portscan_panel.py  stego_panel.py  osint_panel.py  virustotal_panel.py
+      network_panel.py        NETWORK container (Speed Test, Port Scan, Sniffer)
+      intel_panel.py          INTEL container (VirusTotal, Stego, OSINT Geo)
+      net_panel.py  portscan_panel.py  stego_panel.py  osint_panel.py  virustotal_panel.py
       sniffer_panel.py        live capture + decode + analysis (Asphalt)
       weather_panel.py        weather (Open-Meteo + ip-api), drawn icons/graph
       chatgpt_panel.py        embedded ChatGPT + capture-to-prompt

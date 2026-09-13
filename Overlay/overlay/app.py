@@ -118,8 +118,8 @@ def main():
     T.resolve_fonts()
     app.setStyleSheet(T.app_qss())
 
-    from .window import OverlayWindow  # after fonts are resolved
-    win = OverlayWindow()
+    from .banner import Banner  # after fonts are resolved
+    win = Banner()
 
     hk = HotkeyManager()
     app.installNativeEventFilter(hk)
@@ -127,6 +127,7 @@ def main():
     _dispatch = {
         "toggle_visible": win.toggle_visible,
         "analyze": lambda: win.capture_analyze("deep"),
+        "screenshot": win.take_screenshot,
         "cycle_tab": win.cycle_tab,
         "capture": win.toggle_capture,
         "click_through": win.toggle_click_through,

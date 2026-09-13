@@ -6,6 +6,7 @@ CIM/network query is slow. Reuses the shared SubTabHost.
 from ..subtabs import SubTabHost
 from .metrics_panel import MetricsPanel
 from .specs_panel import SpecsPanel
+from .stats_panel import StatsPanel
 
 
 class SystemPanel(SubTabHost):
@@ -13,6 +14,7 @@ class SystemPanel(SubTabHost):
         self.live = MetricsPanel()
         super().__init__([
             ("Live", self.live),
+            ("Stats", StatsPanel),   # lazy: worker starts when first shown
             ("Specs", SpecsPanel),   # lazy: constructed on first visit
         ], parent)
 

@@ -37,7 +37,7 @@ if platform.system().lower().startswith("win"):
     subprocess.Popen.__init__ = _quiet_popen_init
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# overlay/core -> overlay -> Overlay -> Undetectable (holds sibling repos)
+# overlay/core -> overlay -> Overlay -> Utility-Belt (holds sibling projects)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))
 _ENGINE_DIR = os.path.normpath(os.path.join(PROJECT_ROOT, "Port Scanner"))
 
