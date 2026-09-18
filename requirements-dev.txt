@@ -1,0 +1,8 @@
+# Everything needed to run scripts/check.py and benchmarks/ for the Python
+# packages. Each project still keeps its own runtime requirements next to it.
+-r packages/asphalt/requirements.txt
+-r packages/port-scanner/requirements.txt
+-e packages/stegkit
+click>=8.0.0
+pytest>=8
+ruff>=0.6

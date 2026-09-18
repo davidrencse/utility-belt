@@ -1,7 +1,22 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+dist-installer/
+
+# Node / Next.js (apps/osint keeps its own .gitignore as well)
+node_modules/
+.next/
+
+# Local env and runtime state
+.env
+.env.local
 .DS_Store
+Thumbs.db

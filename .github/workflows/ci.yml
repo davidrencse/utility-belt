@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            packages/*/requirements.txt
+            packages/stegkit/pyproject.toml
+      - name: Install
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check
+        run: python scripts/check.py asphalt stegkit port-scanner overlay lint
+
+  osint:
+    name: osint web app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/osint
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/osint/package-lock.json
+      - run: npm ci
+      - name: Check
+        working-directory: .
+        run: python3 scripts/check.py osint --build
+
+  benchmarks:
+    name: Benchmarks vs base
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Compare against the PR base
+        run: python benchmarks/compare.py --base "origin/${{ github.base_ref }}" --packets 5000 --iters 1

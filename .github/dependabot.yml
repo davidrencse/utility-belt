@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /apps/osint
+    schedule:
+      interval: monthly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: pip
+    directories:
+      - /packages/asphalt
+      - /packages/port-scanner
+      - /packages/stegkit
+      - /apps/overlay
+    schedule:
+      interval: monthly
