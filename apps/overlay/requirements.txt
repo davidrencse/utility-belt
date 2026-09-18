@@ -11,4 +11,4 @@ browser_cookie3>=0.19.1
 # Optional: live capture for the TOOLS > Sniffer panel, which reuses the
 # sibling Asphalt engine. Windows also needs Npcap installed in WinPcap
 # API-compatible mode, and capture needs an elevated session.
-scapy>=2.5.0
+scapy>=2.7.0
